@@ -1,2 +1,4 @@
-# DouniuServer
-Server implementation of Douniu game
+DouniuServer
+==================
+
+This project is server implementation of Douniu game.
