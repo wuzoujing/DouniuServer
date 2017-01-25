@@ -1,5 +1,10 @@
 # DouniuServer - Changelog
 
+## Version 1.4 - 2016/10/14
+- 增加joinroom/exitroom命令，支持游戏室（初步）功能。
+- joinRoom返回中增加prepare状态，解决有玩家已准备但新加入的玩家不知道的情况。
+- 完善代码框架，修改PLAY为SUBMIT。
+
 ## Version 1.3 - 2016/10/01
 - 增加\n解决TCP粘包问题。
 - 增加sqlite3数据库支持（注意makefile中sqlite3库路径），尚不完善。

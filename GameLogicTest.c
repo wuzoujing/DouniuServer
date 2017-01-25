@@ -2,10 +2,9 @@
 
 #define TESTONLY
 //#define DOUNIU
-#define MAX_USERS_EACH_DESK 6
 
 Card s_allCards[COUNT_CARDS];
-GameInfo s_players[MAX_USERS_EACH_DESK];
+GameInfo s_players[MAX_USERS_EACH_ROOM];
 
 void test(int str[], int size)
 {
@@ -24,7 +23,7 @@ int main (void)
 #ifdef DOUNIU
 	initializePai(s_allCards,COUNT_CARDS);
 	xiPai(s_allCards,COUNT_CARDS);
-	faPai(s_players, MAX_USERS_EACH_DESK, s_allCards, COUNT_CARDS);
+	faPai(s_players, MAX_USERS_EACH_ROOM, s_allCards, COUNT_CARDS);
 
 	printf("test\n");
 	Card tempCards[5];

@@ -39,12 +39,15 @@ void print_menu(void){
 	printf("\t+ l: List all online user          +\n");
 	printf("\t+ i: logIn                         +\n");
 	printf("\t+ o: logOut                        +\n");
+	printf("\t+ j: Join room                     +\n");
+	printf("\t+ e: Exit room                     +\n");
 	printf("\t+ c: Chat with other online user   +\n");
 	printf("\t+ a: chat with All online user     +\n");
     printf("\t+ p: Prepare                       +\n");
     printf("\t+ b: trying Banker                 +\n");
     printf("\t+ s: Stake(etc. 1x,5x,10x)         +\n");
-    printf("\t+ y: plaY                          +\n");
+    printf("\t+ m: submit                        +\n");
+	printf("\t+ d: Details info                  +\n");
     printf("\t+ h: Help                          +\n");
     printf("\t+----------------------------------+\n");
 }
@@ -125,6 +128,11 @@ int loginCMD(char *username, char *password)
 			data[i] = subtoken;
 			printf("> data[%d] = %s\n", i, subtoken);
 		}
+		if (i <= 1)
+		{
+			printf("user not exist, please register.\n");
+			return ACCOUNT_NOT_EXIST;
+		}
 		userid = atoi(data[OFT_FRM]);
 		strcpy(name, username);
 		myInfo.id = userid;
@@ -152,12 +160,27 @@ int logoutCMD(char *username){
 
     char buff[MAXLINE];
 	sprintf(buff, "%c:%d:%ld:%s", CMD_LOGOUT, userid, time(NULL), "Logout");
-	printf("[C->S][logout]send buff: %s\n", buff);
+	printf("[C->S][logoutCMD]send buff: %s\n", buff);
 	write(sockfd,buff,strlen(buff));
 
 	//wait server response in receiver_looper
-	printf("[logout]wait rep:\n");
+	printf("[logoutCMD]wait rep:\n");
 	return OK;
+}
+
+void joinRoomCMD()
+{
+	char buff[MAXLINE];
+	sprintf(buff, "%c:%d:%ld:%s", CMD_JOIN_ROOM, userid, time(NULL), "join room");
+	printf("[C->S][joinRoomCMD]send buff: %s\n", buff);
+	write(sockfd,buff,strlen(buff));
+}
+void exitRoomCMD()
+{
+	char buff[MAXLINE];
+	sprintf(buff, "%c:%d:%ld:%s", CMD_EXIT_ROOM, userid, time(NULL), "exit room");
+	printf("[C->S][exitRoomCMD]send buff: %s\n", buff);
+	write(sockfd,buff,strlen(buff));
 }
 
 void listAllUsers() {
@@ -193,7 +216,7 @@ void prepareCMD()
 {
     char buff[MAXLINE];
 	sprintf(buff, "%c:%d:%ld:%s", CMD_PREPARE, userid, time(NULL), "Prepare");
-	printf("[C->S][startPrepare]send buff: %s\n", buff);
+	printf("[C->S][prepareCMD]send buff: %s\n", buff);
 	write(sockfd,buff,strlen(buff));
 	myInfo.isPrepared = TRUE;
 }
@@ -232,7 +255,7 @@ void tryingBankerCMD(int value)
 {
     char buff[MAXLINE];
 	sprintf(buff, "%c:%d:%ld:%d", CMD_TRYINGBANKER, userid, time(NULL), value);// 1:trying, 0:skip
-	printf("[C->S][startTryingBanker]send buff: %s\n", buff);
+	printf("[C->S][tryingBankerCMD]send buff: %s\n", buff);
 	write(sockfd,buff,strlen(buff));
 	myInfo.bankerStatus = TBS_TRYING;
 }
@@ -241,20 +264,20 @@ void stakeCMD(int stakeValue)
 {
     char buff[MAXLINE];
 	sprintf(buff, "%c:%d:%ld:%d", CMD_STAKE, userid, time(NULL), stakeValue);
-	printf("[C->S][startPrepare]send buff: %s\n", buff);
+	printf("[C->S][stakeCMD]send buff: %s\n", buff);
 	write(sockfd,buff,strlen(buff));
 	myInfo.stake = stakeValue;
 }
 
-void playCMD(int niuValue)
+void submitCMD(int niuValue)
 {
     char buff[MAXLINE];
-	sprintf(buff, "%c:%d:%ld:%d", CMD_PLAY, userid, time(NULL), niuValue);
-	printf("[C->S][startPrepare]send buff: %s\n", buff);
+	sprintf(buff, "%c:%d:%ld:%d", CMD_SUBMIT, userid, time(NULL), niuValue);
+	printf("[C->S][submitCMD]send buff: %s\n", buff);
 	write(sockfd,buff,strlen(buff));
 }
 
-void playTest()
+void submitTest()
 {
 	//char niustr[MAX_NAME_LEN] = "";
 	int value = 0;
@@ -274,7 +297,15 @@ void playTest()
 	{
 		value = 0;
 	}
-	playCMD(value);
+	submitCMD(value);
+}
+
+void detailsInfoCMD()
+{
+    char buff[MAXLINE];
+	sprintf(buff, "%c:%d:%ld:%s", CMD_DETAILS_INFO, userid, time(NULL), "details");
+	printf("[C->S][detailsInfoCMD]send buff: %s\n", buff);
+	write(sockfd,buff,strlen(buff));
 }
 
 int connectServer(char *ipaddr)
@@ -333,7 +364,11 @@ char* connectServerAndLogin(char *ipaddr, char *username, char *password)
 		afterLoginCMD();
 		return retLoginCMD;
 	}
-	return "";
+	else if (ret == ACCOUNT_NOT_EXIST)
+	{
+		return "NE";
+	}
+	return "ERR";
 }
 
 int logoutAndExit(char *username)
@@ -411,15 +446,29 @@ void * receiver_looper(void * p){
 					printf("[receiver_looper]CMD_LIST\n");
 					format_user_list(data[OFT_DAT]);
 					break;
+				case CMD_JOIN_ROOM:
+					printf("[receiver_looper]CMD_JOIN_ROOM\n");
+#ifdef USE_IN_ANDROID
+					joinRoomCb(data[OFT_DAT], strlen(data[OFT_DAT]));
+#endif
+					break;
+				case CMD_EXIT_ROOM:
+					printf("[receiver_looper]CMD_EXIT_ROOM\n");
+#ifdef USE_IN_ANDROID
+					exitRoomCb(data[OFT_DAT], strlen(data[OFT_DAT]));
+#endif					
+					break;
 				case CMD_S2C_USER_IN:
 					printf("[receiver_looper]CMD_S2C_USER_IN\n");
 #ifdef USE_IN_ANDROID
-					otherLoginCb(data[OFT_DAT], strlen(data[OFT_DAT]));
+					otherJoinRoomCb(data[OFT_DAT], strlen(data[OFT_DAT]));
 #endif
-					break;
-					
+					break;	
 				case CMD_S2C_USER_OUT:
 					printf("[receiver_looper]CMD_S2C_USER_OUT\n");
+#ifdef USE_IN_ANDROID
+					otherExitRoomCb(data[OFT_DAT], strlen(data[OFT_DAT]));
+#endif
 					break;
 				case CMD_LOGOUT:
 					printf("[receiver_looper]CMD_LOGOUT\n");
@@ -470,19 +519,19 @@ void * receiver_looper(void * p){
 					otherUserStakeValueCb(data[OFT_DAT], strlen(data[OFT_DAT]));
 #endif
 					break;
-				case CMD_S2C_WILL_START:
-					printf("[receiver_looper]CMD_S2C_WILL_START\n");
+				case CMD_S2C_WILL_SUBMIT:
+					printf("[receiver_looper]CMD_S2C_WILL_SUBMIT\n");
 #ifdef USE_IN_ANDROID
-					willStartCb(data[OFT_DAT], strlen(data[OFT_DAT]));
+					willSubmitCb(data[OFT_DAT], strlen(data[OFT_DAT]));
 #else
 					format_game_info(data[OFT_DAT]);
 #endif
 					break;
 
-				case CMD_PLAY:
-					printf("[receiver_looper]CMD_PLAY\n");
+				case CMD_SUBMIT:
+					printf("[receiver_looper]CMD_SUBMIT\n");
 #ifdef USE_IN_ANDROID
-					playCb(data[OFT_DAT], strlen(data[OFT_DAT]));
+					submitCb(data[OFT_DAT], strlen(data[OFT_DAT]));
 #endif
 					break;
 				case CMD_S2C_CARD_PATTERN:
@@ -538,6 +587,12 @@ int main()
         case 'o':
 			logoutAndExit(name);
             break;
+		case 'j':
+            joinRoomCMD();
+            break;
+        case 'e':
+            exitRoomCMD();
+            break;	
         case 'c':
             //chat();
             break;
@@ -553,8 +608,12 @@ int main()
 		case 's':
             stakeCMD(5);
             break;
-		case 'y':
-            playTest();//playCMD(1);
+		case 'm':
+            submitTest();//submitCMD(1);
+            break;
+
+		case 'd':
+            detailsInfoCMD();
             break;
         case 'h':
             print_menu();

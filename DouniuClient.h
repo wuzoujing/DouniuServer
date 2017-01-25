@@ -53,7 +53,7 @@ extern void prepareCMD();
 extern void format_game_info(char * buffer);
 extern void tryingBankerCMD(int value);
 extern void stakeCMD(int stakeValue);
-extern void playCMD(int niuValue);
+extern void submitCMD(int niuValue);
 extern int connectServer(char *ipaddr);
 extern char* connectServerAndLogin(char *ipaddr, char *username, char *password);
 extern int logoutAndExit(char *username);
