@@ -1,9 +1,10 @@
 #include "DouniuClient.h"
+#include "GameRule.h"
 
 #ifdef USE_IN_ANDROID
 #include <android/log.h>
 
-#define TAG "[wzj][jni]DouniuClient"
+#define TAG "[wzj][c]DouniuClient"
 #define LOGV(...) __android_log_print(ANDROID_LOG_VERBOSE, TAG, __VA_ARGS__)
 #define LOGD(...) __android_log_print(ANDROID_LOG_DEBUG , TAG, __VA_ARGS__)
 #define LOGI(...) __android_log_print(ANDROID_LOG_INFO  , TAG, __VA_ARGS__)
@@ -18,6 +19,15 @@ char hostAddr[MAX_IP_ADDR_LEN] = DEFAULT_HOST_ADDR;
 char name[MAX_NAME_LEN] = "";
 int sockfd;
 pthread_t thread;
+ClientUserInfo myInfo;
+ClientUserInfo otherUsers;
+int bankerIndex = 0;
+
+char *time2str(long time, char* buf){
+	struct tm *t = localtime(&time);
+	strftime(buf, 32, "%Y-%m-%d-%H:%M:%S", t);
+	return buf;
+}
 
 void print_menu(void){
 	printf("\t+----------------------------------+\n");
@@ -82,8 +92,6 @@ int loginCMD(char *username, char *password)
 		printf("username or password null, please input\n");
 		return ERR;
 	}
-
-	strcpy(name, username);
 	
 	time_t t;
 	time(&t);
@@ -113,7 +121,13 @@ int loginCMD(char *username, char *password)
 			printf("> data[%d] = %s\n", i, subtoken);
 		}
 		userid = atoi(data[OFT_FRM]);
+		strcpy(name, username);
+		myInfo.id = userid;
+		strcpy(myInfo.name,username);
 		printf("userid:%d\n", userid);
+#ifdef USE_IN_ANDROID
+		loginCb(userid, data[OFT_DAT], strlen(data[OFT_DAT]));//tryBankerCb(name, strlen(name));//
+#endif
 		return OK;
     }
 	return ERR;
@@ -143,7 +157,7 @@ int logoutCMD(char *username){
 void listAllUsers() {
     char buff[MAXLINE];
 	sprintf(buff, "%c:%d:%ld:%s", CMD_LIST, userid, time(NULL), "List");
-	printf("[C->S][logout]send buff: %s\n", buff);
+	printf("[C->S][listAllUsers]send buff: %s\n", buff);
 	write(sockfd,buff,strlen(buff));
 }
 
@@ -175,12 +189,15 @@ void prepareCMD()
 	sprintf(buff, "%c:%d:%ld:%s", CMD_PREPARE, userid, time(NULL), "Prepare");
 	printf("[C->S][startPrepare]send buff: %s\n", buff);
 	write(sockfd,buff,strlen(buff));
+	myInfo.isPrepared = TRUE;
 }
 
 void format_game_info(char * buffer){
 	char * data[GAME_DATA_LEN];
 	char * str, *subtoken;
 	int i, n;
+	GameInfo gameInfo;
+	Card tempCard;
 	memset(data, 0, sizeof(data));
 	printf("[format_game_info]buffer: %s\n", buffer);
 	for(str = buffer, i = 0, n = 1; ; str = NULL, i++){
@@ -191,35 +208,67 @@ void format_game_info(char * buffer){
 		printf("[format_game_info]str:%s, subtoken: %s, i:%d\n", str, subtoken,i);
 		if(i != 0 && i % 6 == 0){
 			printf(" %4s  %8s  %s  %s  %s  %s  %s\n", data[OFT_USR_ID], data[OFT_USR_NM], data[OFT_CARD1], data[OFT_CARD2], data[OFT_CARD3], data[OFT_CARD4], data[OFT_CARD5]);	
+			if (userid == atoi(data[OFT_USR_ID]))
+			{
+				gameInfo.cards[0] = updateCardById(atoi(data[OFT_CARD1]));
+				gameInfo.cards[1] = updateCardById(atoi(data[OFT_CARD2]));
+				gameInfo.cards[2] = updateCardById(atoi(data[OFT_CARD3]));
+				gameInfo.cards[3] = updateCardById(atoi(data[OFT_CARD4]));
+				gameInfo.cards[4] = updateCardById(atoi(data[OFT_CARD5]));
+			}
 			n++;
 			i = -1;
 		}
 	}
 }
 
-void tryingBankerCMD()
+void tryingBankerCMD(int value)
 {
     char buff[MAXLINE];
-	sprintf(buff, "%c:%d:%ld:%s", CMD_TRYINGBANKER, userid, time(NULL), "1");//"1":trying, "0":skip
+	sprintf(buff, "%c:%d:%ld:%d", CMD_TRYINGBANKER, userid, time(NULL), value);// 1:trying, 0:skip
 	printf("[C->S][startTryingBanker]send buff: %s\n", buff);
 	write(sockfd,buff,strlen(buff));
+	myInfo.bankerStatus = TBS_TRYING;
 }
 
-void stakeCMD()
+void stakeCMD(int stake)
 {
     char buff[MAXLINE];
-	int stake = 5;
 	sprintf(buff, "%c:%d:%ld:%d", CMD_STAKE, userid, time(NULL), stake);
 	printf("[C->S][startPrepare]send buff: %s\n", buff);
 	write(sockfd,buff,strlen(buff));
+	myInfo.stake = stake;
 }
 
-void playCMD()
+void playCMD(int niu)
 {
     char buff[MAXLINE];
-	sprintf(buff, "%c:%d:%ld:%s", CMD_PLAY, userid, time(NULL), "pattern");//pattern, points and maxCardValue
+	sprintf(buff, "%c:%d:%ld:%d", CMD_PLAY, userid, time(NULL), niu);//pattern, points and maxCardValue
 	printf("[C->S][startPrepare]send buff: %s\n", buff);
 	write(sockfd,buff,strlen(buff));
+}
+
+void playTest()
+{
+	//char niustr[MAX_NAME_LEN] = "";
+	int value = 0;
+	printf("is there niu? (1 or 0) \n");
+	//if(fgets(niustr, sizeof(niustr), stdin) == NULL){
+	//	perror("fgets");
+	//	return ERR;
+	//}
+
+	int answer = getchar();	// eat <Enter>
+	while(getchar() != '\n');	// eat <Enter>
+	if (answer == '1')
+	{
+		value = 1;
+	}
+	else
+	{
+		value = 0;
+	}
+	playCMD(value);
 }
 
 int connectServer(char *ipaddr)
@@ -272,7 +321,14 @@ int connectServerAndLogin(char *ipaddr, char *username, char *password)
 
 	//账户登录并创建线程接收来自服务器的反馈
 	printf("login as user: [%s] ...\n", username);
-	return loginCMD(username, password);
+	ret = loginCMD(username, password);
+	if (ret == OK)
+	{
+		printf("login success, will create thread to receive response from server\n");
+		afterLoginCMD();
+		return OK;
+	}
+	return ret;
 }
 
 //login时创建的接收线程，处理服务器的消息
@@ -299,41 +355,100 @@ void * receiver_looper(void * p){
 				data[i] = subtoken;
 				printf("> data[%d] = %s\n", i, subtoken);
 			}
-			//printf("==%d==\n",__LINE__);
-			
-			// process received data
-			// data format error
-			//if(i != DATA_LEN)
-			//	continue;
 
 			switch(data[OFT_CMD][0]){
 			case CMD_LIST:
-				//if(strcmp(data[OFT_FRM], TYPE_SERVER_STR)){
-				//	continue;
-				//}
-				//format_user_list(data[OFT_DAT]);
 				printf("[receiver_looper]CMD_LIST\n");
 				format_user_list(data[OFT_DAT]);
 				break;
+			case CMD_S2C_USER_IN:
+				printf("[receiver_looper]CMD_S2C_USER_IN\n");
+#ifdef USE_IN_ANDROID
+				otherLoginCb(data[OFT_DAT], strlen(data[OFT_DAT]));
+#endif
+				break;
+				
+			case CMD_S2C_USER_OUT:
+				printf("[receiver_looper]CMD_S2C_USER_OUT\n");
+				break;
 			case CMD_LOGOUT:
 				printf("[receiver_looper]CMD_LOGOUT\n");
-				//if(strcmp(data[OFT_FRM], TYPE_SERVER_STR)){
-				//	continue;
-				//}
 				printf("> %s \n", data[OFT_DAT]);
-				//printf("%s\n", time2str(atol(data[OFT_TIM]), data[OFT_DAT]));
 				exit(0);
-			case CMD_CHAT:		// print chat content
-			    printf("[receiver_looper]CMD_CHAT\n");
-				break;
+
 			case CMD_PREPARE:
 				printf("[receiver_looper]CMD_PREPARE\n");
-				printf("[receiver_looper]%s\n",data[OFT_DAT]);
+#ifdef USE_IN_ANDROID
+				prepareCb(data[OFT_DAT], strlen(data[OFT_DAT]));
+#endif
 				break;
-			case CMD_START:
-				printf("[receiver_looper]CMD_START\n");
+			case CMD_S2C_USER_PREP:
+				printf("[receiver_looper]CMD_S2C_USER_PREP\n");
+#ifdef USE_IN_ANDROID
+				otherUserPrepareCb(data[OFT_DAT], strlen(data[OFT_DAT]));
+#endif
+				break;
+			case CMD_S2C_WILL_BANKER:
+				printf("[receiver_looper]CMD_S2C_WILL_BANKER\n");
+#ifdef USE_IN_ANDROID
+				willBankerCb(data[OFT_DAT], strlen(data[OFT_DAT]));
+#endif
+				break;
+				
+			case CMD_TRYINGBANKER:
+				printf("[receiver_looper]CMD_TRYINGBANKER\n");
+#ifdef USE_IN_ANDROID
+				tryBankerCb(data[OFT_DAT], strlen(data[OFT_DAT]));
+#endif
+				break;
+			case CMD_S2C_WILL_STAKE:
+				printf("[receiver_looper]CMD_S2C_WILL_STAKE\n");
+#ifdef USE_IN_ANDROID
+				willStakeCb(data[OFT_DAT], strlen(data[OFT_DAT]));
+#endif
+				break;
+				
+			case CMD_STAKE:
+				printf("[receiver_looper]CMD_STAKE\n");
+#ifdef USE_IN_ANDROID
+				stakeCb(data[OFT_DAT], strlen(data[OFT_DAT]));
+#endif
+				break;
+			case CMD_S2C_STAKE_VALUE:
+				printf("[receiver_looper]CMD_S2C_STAKE_VALUE\n");
+#ifdef USE_IN_ANDROID
+				otherUserStakeValueCb(data[OFT_DAT], strlen(data[OFT_DAT]));
+#endif
+				break;
+			case CMD_S2C_WILL_START:
+				printf("[receiver_looper]CMD_S2C_WILL_START\n");
 				format_game_info(data[OFT_DAT]);
-				//TODO
+#ifdef USE_IN_ANDROID
+				willStartCb(data[OFT_DAT], strlen(data[OFT_DAT]));
+#endif
+				break;
+
+			case CMD_PLAY:
+				printf("[receiver_looper]CMD_PLAY\n");
+#ifdef USE_IN_ANDROID
+				playCb(data[OFT_DAT], strlen(data[OFT_DAT]));
+#endif
+				break;
+			case CMD_S2C_CARD_PATTERN:
+				printf("[receiver_looper]CMD_S2C_CARD_PATTERN\n");
+#ifdef USE_IN_ANDROID
+				otherUserCardPatternCb(data[OFT_DAT], strlen(data[OFT_DAT]));
+#endif
+				break;
+			case CMD_S2C_GAME_RESULT:
+				printf("[receiver_looper]CMD_S2C_GAME_RESULT\n");
+#ifdef USE_IN_ANDROID
+				gameResultCb(data[OFT_DAT], strlen(data[OFT_DAT]));
+#endif
+				break;
+				
+			case CMD_CHAT:		// print chat content
+			    printf("[receiver_looper]CMD_CHAT\n");
 				break;
 			default:
 				break;
@@ -345,8 +460,8 @@ void * receiver_looper(void * p){
 
 int main()
 {
-    if (connectServerAndLogin(DEFAULT_HOST_ADDR, "test", "123") != OK)
-    //if (connectServer(DEFAULT_HOST_ADDR) != OK)
+    //if (connectServerAndLogin(DEFAULT_HOST_ADDR, "test", "123") != OK)
+    if (connectServer(DEFAULT_HOST_ADDR) != OK)
     {
 		printf("Occur some error, need exit.\n");
         return  -1;
@@ -389,13 +504,13 @@ int main()
             prepareCMD();
             break;
 		case 'b':
-            tryingBankerCMD();
+            tryingBankerCMD(1);
             break;
 		case 's':
-            stakeCMD();
+            stakeCMD(5);
             break;
 		case 'y':
-            playCMD();
+            playTest();//playCMD(1);
             break;
         case 'h':
             print_menu();

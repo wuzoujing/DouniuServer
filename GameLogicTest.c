@@ -1,7 +1,7 @@
 #include "GameLogic.h"
 
 #define DOUNIU//TEST
-#define MAX_USERS 3
+#define MAX_USERS 6
 
 Card s_allCards[COUNT_CARDS];
 GameInfo s_players[MAX_USERS];
@@ -32,8 +32,8 @@ int main (void)
 	tempCards[2]=updateCardById(31);
 	tempCards[3]=updateCardById(44);
 	tempCards[4]=updateCardById(45);
-	//bool ret = CheckZhaDan(tempCards, 5);
-	int ret = GetMaxCardValue(tempCards, 5);
+	bool ret = checkZhaDan(tempCards, 5);
+	//int ret = getMaxCardValue(tempCards, 5);
 	printf("test ret:%d\n",ret);
 #endif
 

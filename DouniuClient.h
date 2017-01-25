@@ -16,16 +16,26 @@
 #define PORT 6666
 #define MAX_IP_ADDR_LEN 20
 #define DEFAULT_HOST_ADDR "127.0.0.1"
-//#define DEFAULT_HOST_ADDR "192.168.1.122"
+//#define DEFAULT_HOST_ADDR "192.168.1.139"
 
 #ifndef _Included_DouniuClient_H
 #define _Included_DouniuClient_H
 
+typedef struct CLIENT_USER_INFO {
+	int id;
+	char name[MAX_NAME_LEN];
+	bool isPrepared;
+	enum TRYING_BANKER_STATUS bankerStatus;
+	int stake;
+	GameInfo gameInfo;
+}ClientUserInfo;
 
 extern int userid;
 extern char name[MAX_NAME_LEN];
 extern int sockfd;
 extern pthread_t thread;
+extern ClientUserInfo myInfo;
+extern int bankerIndex;
 
 //extern void print_menu(void);
 //extern int get_choice();
