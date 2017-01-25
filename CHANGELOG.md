@@ -1,5 +1,8 @@
 # DouniuServer - Changelog
 
+## Version 1.4.1 - 2016/10/14
+- 解决游戏循环bug。
+
 ## Version 1.4 - 2016/10/14
 - 增加joinroom/exitroom命令，支持游戏室（初步）功能。
 - joinRoom返回中增加prepare状态，解决有玩家已准备但新加入的玩家不知道的情况。

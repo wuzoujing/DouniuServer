@@ -30,6 +30,11 @@ sqlite3 *db;
 //重置用户的游戏状态信息
 void resetTempGameStatus(int rid,int uid)//void resetOneUserInfo(int rid,int uid)
 {
+	if (rid >= COUNT_ROOMS || uid >= MAX_USERS_EACH_ROOM)
+	{
+		printf("[resetTempGameStatus]rid or uid is out of range\n");
+		return;
+	}
     s_arrayRoom[rid].allGameInfo[uid].tempStatus.isPrepared = FALSE;
     s_arrayRoom[rid].allGameInfo[uid].tempStatus.bankerStatus = TBS_NONE;
     s_arrayRoom[rid].allGameInfo[uid].tempStatus.stake = 0;
@@ -39,6 +44,11 @@ void resetTempGameStatus(int rid,int uid)//void resetOneUserInfo(int rid,int uid
 //重置用户的游戏信息
 void resetGameInfo(int rid, int uid)
 {
+	if (rid >= COUNT_ROOMS || uid >= MAX_USERS_EACH_ROOM)
+	{
+		printf("[resetGameInfo]rid or uid is out of range\n");
+		return;
+	}
 	s_arrayRoom[rid].bankerIndex = -1;
 	s_arrayRoom[rid].clientId[uid] = -1;
 
@@ -52,6 +62,12 @@ void resetGameInfo(int rid, int uid)
 //重置用户信息
 void resetUserInfo(int clientID)
 {
+	if (clientID >= MAX_CLIENTS_SUPPORT)
+	{
+		printf("[resetUserInfo]clientID is out of range\n");
+		return;
+	}
+		
 	//s_arrayUser[clientID].deskId = -1;
 	strcpy(s_arrayUser[clientID].ipaddr,"");
 
@@ -188,6 +204,25 @@ void appendAllUsersInfo(int rid, char* databuf)
 			int clientID = s_arrayRoom[rid].clientId[i];
 			//sprintf(info, "%d#%d#%s#%ld#", rid, s_arrayRoom[rid].allGameInfo[i].deskId, s_arrayUser[clientID].dbInfo.name, s_arrayUser[clientID].dbInfo.money);
 			sprintf(info, "%d#%s#%ld#", s_arrayRoom[rid].allGameInfo[i].deskId, s_arrayUser[clientID].dbInfo.name, s_arrayUser[clientID].dbInfo.money);
+			strcat(databuf, info);
+		}
+	}
+	if (strlen(databuf) > 0)
+	{
+		databuf[strlen(databuf) - 1] = 0;
+	}
+}
+
+void appendAllUsersInfoMore(int rid, char* databuf)
+{
+	char info[256];
+	int i = 0;
+	for(i=0;i<MAX_USERS_EACH_ROOM;i++)
+	{
+		if (s_arrayRoom[rid].allGameInfo[i].deskId != -1)
+		{
+			int clientID = s_arrayRoom[rid].clientId[i];
+			sprintf(info, "%d#%s#%ld#%d#", s_arrayRoom[rid].allGameInfo[i].deskId, s_arrayUser[clientID].dbInfo.name, s_arrayUser[clientID].dbInfo.money, (s_arrayRoom[rid].allGameInfo[i].tempStatus.isPrepared?1:0) );
 			strcat(databuf, info);
 		}
 	}
@@ -422,39 +457,6 @@ int processMsg(char* buffer, int n)
 			//反馈login OK消息给client
 			write(connfd[n],sendBuff,strlen(sendBuff));
 			usleep(SLEEP_TIME_SHORT);
-
-			/*memset(databuf, 0, sizeof(databuf));
-			appendAllUsersInfo(databuf);
-
-			sprintf(sendBuff, "%c:%d:%ld:%s", CMD_LOGIN, n, time(NULL), databuf);
-			printf("[S->C][processMsg]%s\n",sendBuff);
-
-			//反馈login OK消息给client
-			write(connfd[n],sendBuff,strlen(sendBuff));
-			usleep(SLEEP_TIME_SHORT);
-			
-			//把新用户的加入告知其他用户
-			memset(databuf, 0, sizeof(databuf));
-			sprintf(databuf, "%d#%s#%ld", s_users[n].deskId, s_users[n].name, s_users[n].money);
-			for(i=0;i<MAX_USERS_EACH_ROOM;i++)
-			{
-				if(i!=n && connfd[i]!=-1)
-				{
-					memset(sendBuff, 0, sizeof(sendBuff));
-					sprintf(sendBuff, "%c:%d:%ld:%s", CMD_S2C_USER_IN, i, time(NULL), databuf);
-					printf("[S->C][processMsg]notify login msg[%s] to user[%d]\n",sendBuff, i);
-					write(connfd[i],sendBuff,strlen(sendBuff));
-					usleep(SLEEP_TIME_SHORT);
-				}
-				else if (i==n)
-				{
-					printf("[processMsg]i:%d itself, ip:%s\n",i, s_users[n].ipaddr);
-				}
-				else
-				{
-					printf("[processMsg]i:%d connfd null\n",i);
-				}
-			}*/
 		}
 		break;
 	case CMD_LOGOUT:
@@ -467,31 +469,11 @@ int processMsg(char* buffer, int n)
 			write(connfd[n],sendBuff,strlen(sendBuff));
 			usleep(SLEEP_TIME_SHORT);
 
-			/*//同时通知其他用户有人退出登录
-			for(i=0;i<MAX_USERS_EACH_ROOM;i++)
-			{
-				if(i!=n && connfd[i]!=-1)
-				{
-					memset(sendBuff, 0, sizeof(sendBuff));
-					sprintf(sendBuff, "%c:%d:%ld:%d\n", CMD_S2C_USER_OUT, i, time(NULL), n);
-					printf("[S->C][processMsg]notify logout msg[%s] to user[%d]\n",sendBuff, i);
-					write(connfd[i],sendBuff,strlen(sendBuff));
-					usleep(SLEEP_TIME_SHORT);
-				}
-				else if (i==n)
-				{
-					printf("[processMsg]i:%d itself, ip:%s\n",i, s_users[n].ipaddr);
-				}
-				else
-				{
-					printf("[processMsg]i:%d connfd null\n",i);
-				}
-			}*/
-
 			printf("[processMsg]exit thread\n");
 			close(connfd[n]);
 
 			//清理变量及退出当前client的处理线程
+			resetGameInfo(rid, uid);
 			resetUserInfoAndConnfd(n);
 			pthread_exit(0);
 		}
@@ -510,7 +492,7 @@ int processMsg(char* buffer, int n)
 				s_arrayRoom[rid].allGameInfo[uid].deskId = uid;
 				
 				memset(databuf, 0, sizeof(databuf));
-				appendAllUsersInfo(rid, databuf);
+				appendAllUsersInfoMore(rid, databuf);
 
 				//反馈join room OK消息给client
 				sprintf(sendBuff, "%c:%d:%ld:%s\n", CMD_JOIN_ROOM, n, time(NULL), databuf);
@@ -520,7 +502,7 @@ int processMsg(char* buffer, int n)
 				
 				//把新用户的加入告知其他用户
 				memset(databuf, 0, sizeof(databuf));
-				sprintf(databuf, "%d#%s#%ld", s_arrayRoom[rid].allGameInfo[uid].deskId, s_arrayUser[n].dbInfo.name, s_arrayUser[n].dbInfo.money);
+				sprintf(databuf, "%d#%s#%ld#%d", s_arrayRoom[rid].allGameInfo[uid].deskId, s_arrayUser[n].dbInfo.name, s_arrayUser[n].dbInfo.money, (s_arrayRoom[rid].allGameInfo[uid].tempStatus.isPrepared?1:0) );
 				for(i=0;i<MAX_USERS_EACH_ROOM;i++)
 				{
 					int clientID = s_arrayRoom[rid].clientId[i];
