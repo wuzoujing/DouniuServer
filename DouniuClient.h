@@ -15,8 +15,12 @@
 #define MAXLINE 512
 #define PORT 6666
 #define MAX_IP_ADDR_LEN 20
+
+#ifdef USE_IN_ANDROID
+#define DEFAULT_HOST_ADDR "192.168.1.139"
+#else 
 #define DEFAULT_HOST_ADDR "127.0.0.1"
-//#define DEFAULT_HOST_ADDR "192.168.1.139"
+#endif
 
 #ifndef _Included_DouniuClient_H
 #define _Included_DouniuClient_H
@@ -39,7 +43,7 @@ extern int bankerIndex;
 
 //extern void print_menu(void);
 //extern int get_choice();
-extern int login();
+//extern int loginTest();
 extern int loginCMD(char *username, char *password);
 extern void afterLoginCMD();
 extern int logoutCMD(char *username);
@@ -47,11 +51,12 @@ extern void listAllUsers();
 extern void format_user_list(char * buffer);
 extern void prepareCMD();
 extern void format_game_info(char * buffer);
-extern void tryingBankerCMD();
-extern void stakeCMD();
-extern void playCMD();
+extern void tryingBankerCMD(int value);
+extern void stakeCMD(int stakeValue);
+extern void playCMD(int niuValue);
 extern int connectServer(char *ipaddr);
-extern int connectServerAndLogin(char *ipaddr, char *username, char *password);
+extern char* connectServerAndLogin(char *ipaddr, char *username, char *password);
+extern int logoutAndExit(char *username);
 extern void * receiver_looper(void * p);
 
 #endif	//_Included_DouniuClient_H

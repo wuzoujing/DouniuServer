@@ -1,5 +1,9 @@
 # DouniuServer - Changelog
 
+## Version 1.3 - 2016/10/01
+- 增加\n解决TCP粘包问题。
+- 增加sqlite3数据库支持（注意makefile中sqlite3库路径），尚不完善。
+
 ## Version 1.2 - 2016/09/12
 - 完善命令封装格式，包括tryingbanker/stake/play。
 - 定义宏USE_IN_ANDROID判断是否Android版本。

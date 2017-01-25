@@ -1,10 +1,11 @@
 #include "GameLogic.h"
 
-#define DOUNIU//TEST
-#define MAX_USERS 6
+#define TESTONLY
+//#define DOUNIU
+#define MAX_USERS_EACH_DESK 6
 
 Card s_allCards[COUNT_CARDS];
-GameInfo s_players[MAX_USERS];
+GameInfo s_players[MAX_USERS_EACH_DESK];
 
 void test(int str[], int size)
 {
@@ -23,7 +24,7 @@ int main (void)
 #ifdef DOUNIU
 	initializePai(s_allCards,COUNT_CARDS);
 	xiPai(s_allCards,COUNT_CARDS);
-	faPai(s_players, MAX_USERS, s_allCards, COUNT_CARDS);
+	faPai(s_players, MAX_USERS_EACH_DESK, s_allCards, COUNT_CARDS);
 
 	printf("test\n");
 	Card tempCards[5];
@@ -37,7 +38,7 @@ int main (void)
 	printf("test ret:%d\n",ret);
 #endif
 
-#ifdef TEST
+#ifdef TESTONLY
 	int str[3];
 	str[0]=1;
 	str[1]=3;
