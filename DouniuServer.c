@@ -1,74 +1,73 @@
-#include <sys/types.h>
-#include <sys/socket.h>
-#include <stdio.h>
-#include <netinet/in.h>
-#include <arpa/inet.h>
-#include <unistd.h>
-#include <string.h>
-#include <stdlib.h>
-#include <fcntl.h>
-#include <sys/shm.h>
-#include <pthread.h>
+#include "DouniuServer.h"
+
+#ifdef USE_IN_ANDROID
+#include <android/log.h>
+
+#define TAG "[wzj][jni]DouniuServer"
+#define LOGV(...) __android_log_print(ANDROID_LOG_VERBOSE, TAG, __VA_ARGS__)
+#define LOGD(...) __android_log_print(ANDROID_LOG_DEBUG , TAG, __VA_ARGS__)
+#define LOGI(...) __android_log_print(ANDROID_LOG_INFO  , TAG, __VA_ARGS__)
+#define LOGW(...) __android_log_print(ANDROID_LOG_WARN  , TAG, __VA_ARGS__)
+#define LOGE(...) __android_log_print(ANDROID_LOG_ERROR  , TAG, __VA_ARGS__)
+#define printf LOGV
+#endif	//USE_IN_ANDROID
 
 
-#define LISTENQ 5
-#define MAXLINE 512
-#define MAXMEM 10
-#define NAMELEN 20
-#define PORT 6666
+int listenfd,connfd[MAX_USERS];//·Ö±ğ¼ÇÂ¼·şÎñÆ÷¶ËµÄÌ×½Ó×ÖÓëÁ¬½ÓµÄ¶à¸ö¿Í»§¶ËµÄÌ×½Ó×Ö
+UserInfo s_users[MAX_USERS];
+Card s_cards[COUNT_CARDS];
 
-int listenfd,connfd[MAXMEM];//åˆ†åˆ«è®°å½•æœåŠ¡å™¨ç«¯çš„å¥—æ¥å­—ä¸è¿æ¥çš„å¤šä¸ªå®¢æˆ·ç«¯çš„å¥—æ¥å­—
-
-void quit();//æœåŠ¡å™¨å…³é—­å‡½æ•°
-void rcv_snd(int n);//æœåŠ¡å™¨æ¥æ”¶å¹¶è½¬å‘æ¶ˆæ¯å‡½æ•°
-
-int main()
+int initAndAccept()
 {
-    pthread_t thread;
+	pthread_t thread;
     struct sockaddr_in servaddr,cliaddr;
     socklen_t len;
     time_t ticks;
     char buff[MAXLINE];
 
-//è°ƒç”¨socketå‡½æ•°åˆ›å»ºæœåŠ¡å™¨ç«¯çš„å¥—æ¥å­—
+//µ÷ÓÃsocketº¯Êı´´½¨·şÎñÆ÷¶ËµÄÌ×½Ó×Ö
     printf("Socket...\n");
     listenfd=socket(AF_INET,SOCK_STREAM,0);
     if(listenfd<0)
     {
-        printf("Socket created failed.\n");
-        return -1;
+        printf("Socket created failed:%s\n",strerror(errno));
+        return ERR;
     }
 
-//è°ƒç”¨bindå‡½æ•°ä½¿å¾—æœåŠ¡å™¨ç«¯çš„å¥—æ¥å­—ä¸åœ°å€å®ç°ç»‘å®š
+//µ÷ÓÃbindº¯ÊıÊ¹µÃ·şÎñÆ÷¶ËµÄÌ×½Ó×ÖÓëµØÖ·ÊµÏÖ°ó¶¨
     printf("Bind...\n");
     servaddr.sin_family=AF_INET;
     servaddr.sin_port=htons(PORT);
     servaddr.sin_addr.s_addr=htonl(INADDR_ANY);
     if(bind(listenfd,(struct sockaddr*)&servaddr,sizeof(servaddr))<0)
     {
-        printf("Bind failed.\n");
-        return -1;
+        printf("Bind failed:%s\n",strerror(errno));
+        return ERR;
     }
 
-//è°ƒç”¨listenå‡½æ•°ï¼Œå°†ä¸€ä¸ªä¸»åŠ¨è¿æ¥å¥—æ¥å­—å˜ä¸ºè¢«åŠ¨çš„å€¾å¬å¥—æ¥å­—
-//åœ¨æ­¤è¿‡ç¨‹ä¸­å®Œæˆtcpçš„ä¸‰æ¬¡æ¡æ‰‹è¿æ¥
+//µ÷ÓÃlistenº¯Êı£¬½«Ò»¸öÖ÷¶¯Á¬½ÓÌ×½Ó×Ö±äÎª±»¶¯µÄÇãÌıÌ×½Ó×Ö
+//ÔÚ´Ë¹ı³ÌÖĞÍê³ÉtcpµÄÈı´ÎÎÕÊÖÁ¬½Ó
     printf("listening...\n");
     listen(listenfd,LISTENQ);
 
-//åˆ›å»ºä¸€ä¸ªçº¿ç¨‹ï¼Œå¯¹æœåŠ¡å™¨ç¨‹åºè¿›è¡Œç®¡ç†ï¼ˆå…³é—­ï¼‰
+//´´½¨Ò»¸öÏß³Ì£¬¶Ô·şÎñÆ÷³ÌĞò½øĞĞ¹ÜÀí£¨¹Ø±Õ£©
     pthread_create(&thread,NULL,(void*)(&quit),NULL);
 
-//è®°å½•ç©ºé—²çš„å®¢æˆ·ç«¯çš„å¥—æ¥å­—æè¿°ç¬¦ï¼ˆ-1ä¸ºç©ºé—²ï¼‰
+//¼ÇÂ¼¿ÕÏĞµÄ¿Í»§¶ËµÄÌ×½Ó×ÖÃèÊö·û£¨-1Îª¿ÕÏĞ£©
     int i=0;
-    for(i=0;i<MAXMEM;i++)
+    for(i=0;i<MAX_USERS;i++)
     {
         connfd[i]=-1;
+		s_users[i].id = -1;
+		strcpy(s_users[i].name, "");
+		strcpy(s_users[i].ipaddr, "");
+		s_users[i].isPrepared = FALSE;
     }
 
     while(1)
     {
         len=sizeof(cliaddr);
-        for(i=0;i<MAXMEM;i++)
+        for(i=0;i<MAX_USERS;i++)
         {
             if(connfd[i]==-1)
             {
@@ -76,112 +75,263 @@ int main()
             }
         }
 
-//è°ƒç”¨acceptä»listenæ¥å—çš„è¿æ¥é˜Ÿåˆ—ä¸­å–å¾—ä¸€ä¸ªè¿æ¥
+//µ÷ÓÃaccept´Ólisten½ÓÊÜµÄÁ¬½Ó¶ÓÁĞÖĞÈ¡µÃÒ»¸öÁ¬½Ó
         connfd[i]=accept(listenfd,(struct sockaddr*)&cliaddr,&len);
 
         ticks=time(NULL);
         sprintf(buff,"%.24s\r\n",ctime(&ticks));
+		strcpy(s_users[i].ipaddr, inet_ntoa(cliaddr.sin_addr));
         printf("%s Connect from: %s,port %d\n\n",buff,inet_ntoa(cliaddr.sin_addr),ntohs(cliaddr.sin_port));
 
-//é’ˆå¯¹å½“å‰å¥—æ¥å­—åˆ›å»ºä¸€ä¸ªçº¿ç¨‹ï¼Œå¯¹å½“å‰å¥—æ¥å­—çš„æ¶ˆæ¯è¿›è¡Œå¤„ç†
-        pthread_create(malloc(sizeof(pthread_t)),NULL,(void*)(&rcv_snd),(void*)i);
-
+//Õë¶Ôµ±Ç°Ì×½Ó×Ö´´½¨Ò»¸öÏß³Ì£¬¶Ôµ±Ç°Ì×½Ó×ÖµÄÏûÏ¢½øĞĞ´¦Àí
+        pthread_create(malloc(sizeof(pthread_t)),NULL,(void*)(&receiveCMD),(void*)i);
     }
+	return OK;
+}
+
+void disconnect()
+{
+	printf("[disconnect]Byebye...\n");
+	close(listenfd);
+#ifndef USE_IN_ANDROID
+    exit(0);
+#endif	//USE_IN_ANDROID
+}
+
+int main()
+{
+	if (initAndAccept() != OK)
+	{
+		printf("Occur some error, need exit.\n");
+        return  -1;
+	}
+	printf("exit.\n");
     return 0;
 }
 
+//·şÎñÆ÷¹Ø±Õº¯Êı,ÈôÊäÈëquitÔòÍË³ö·şÎñÆ÷
 void quit()
 {
     char msg[10];
-    printf("thread quit[id:%lu] created\n", pthread_self());
+    printf("[quit]thread quit[id:%lu] created\n", pthread_self());
     while(1)
     {
         scanf("%s",msg);
         if(strcmp("quit",msg)==0)
         {
-            printf("Byebye...\n");
-            close(listenfd);
-            exit(0);
+			disconnect();
         }
     }
 }
 
-void rcv_snd(int n)
+//·şÎñÆ÷½ÓÊÕ²¢×ª·¢ÏûÏ¢º¯Êı
+//  Ã¿¸öclient¶¼¶ÔÓ¦Ò»¸ö½ÓÊÕÏß³Ì£¬nÎªclientID
+//  ½ÓÊÕclientµÄÇëÇóÏûÏ¢ºó£¬µ÷ÓÃprocessMsgÀ´´¦ÀíÏûÏ¢£¬È»ºó·´À¡ÏûÏ¢¸øclient
+void receiveCMD(int n)
 {
-    char* ask="Your name pleaseï¼š";
-    char buff[MAXLINE];
     char buff1[MAXLINE];
-    char buff2[MAXLINE];
-    char name[NAMELEN];
-    time_t ticks;
-    int i=0;
-    int retval;
+	int len;
+    printf("[rcv_snd]thread rcv_snd[n:%d][id:%lu] created\n", n, pthread_self());
 
-    printf("thread rcv_snd[%d][id:%lu] created\n", n, pthread_self());
-
-//è·å–æ­¤è¿›ç¨‹å¯¹åº”çš„å¥—æ¥å­—ç”¨æˆ·çš„åå­—
-    write(connfd[n],ask,strlen(ask));
-    int len;
-    len=read(connfd[n],name,NAMELEN);
-     if(len>0)
-     {
-         name[len]=0;
-     }
-
-//æŠŠå½“å‰ç”¨æˆ·çš„åŠ å…¥å‘ŠçŸ¥æ‰€æœ‰ç”¨æˆ·
-    strcpy(buff,name);
-    strcat(buff,"\tjoin in\0");
-    for(i=0;i<MAXMEM;i++)
-    {
-        if(connfd[i]!=-1)
-        {
-            write(connfd[i],buff,strlen(buff));
-        }
-    }
-
-//æ¥å—å½“å‰ç”¨æˆ·çš„ä¿¡æ¯å¹¶å°†å…¶è½¬å‘ç»™æ‰€æœ‰çš„ç”¨æˆ·
+//½ÓÊÜµ±Ç°ÓÃ»§µÄĞÅÏ¢²¢½«Æä×ª·¢¸øËùÓĞµÄÓÃ»§
     while(1)
     {
         if((len=read(connfd[n],buff1,MAXLINE))>0)
         {
-             buff1[len]=0;
-
-//å½“å½“å‰ç”¨æˆ·çš„è¾“å…¥ä¿¡æ¯ä¸ºâ€œbyeâ€æ—¶ï¼Œå½“å‰ç”¨æˆ·é€€å‡º
-             if(strcmp("bye",buff)==0)
-             {
-                 close(connfd[n]);
-                 connfd[n]=-1;
-                 pthread_exit(&retval);
-             }
-
-             ticks=time(NULL);
-             sprintf(buff2,"%.24s\r\n",ctime(&ticks));
-             write(connfd[n],buff2,strlen(buff2));
-
-             strcpy(buff,name);
-             strcat(buff,"\t");
-             strcat(buff,buff2);
-             strcat(buff,buff1);
-
-            for(i=0;i<MAXMEM;i++)
-            {
-                 if(connfd[i]!=-1)
-                 {
-                      write(connfd[i],buff,strlen(buff));
-                 }
-            }
+            buff1[len]=0;
+			printf("\n[S<-C][rcv_snd]buff1: %s, n:%d\n", buff1, n);
+			processMsg(buff1, n);
         }
-
     }
 }
 
-int process_msg(char* buffer)
+//ÏûÏ¢´¦Àí¹Ø¼üº¯Êı
+//  bufferÎªÇëÇóÏûÏ¢×Ö·û´®£¬nÎªclientID
+int processMsg(char* buffer, int n)
 {
-    //char * data[DATA_LEN];
-    //char * str, *subtoken;
+	char * data[DATA_LEN];
+	char * str, *subtoken;
+	char sendBuff[MAXLINE];
+	int i;
+	memset(data, 0, sizeof(data));
 
+	//°´Ğ­Òé¸ñÊ½½âÎöÏûÏ¢£¬È»ºó´æ·Åµ½dataÊı×é
+	for(str = buffer, i = 0; ; str = NULL, i++){
+		subtoken = strtok(str, DATA_TOK);
+		if(subtoken == NULL)
+			break;
+		data[i] = subtoken;
+		printf("[processMsg]> data[%d] = %s\n", i, subtoken);
+	}
 
+	char info[256];
+	char buf[256];
+	bool hasSomeoneNotPrepared = TRUE;
+	int countUsers = 0;
+	
+	// ´¦ÀíÏûÏ¢
+	switch(data[OFT_CMD][0])
+	{
+	case CMD_LIST:
+		{
+			printf("[processMsg]CMD_LIST\n");
+			memset(buf, 0, sizeof(buf));
+			for(i=0;i<MAX_USERS;i++)
+			{
+				if (s_users[i].id != -1)
+				{
+					sprintf(info, "%d#%s#%ld#", s_users[i].id, s_users[i].name, s_users[i].login_time);
+					strcat(buf, info);
+				}
+			}
+			if (strlen(buf) > 0)
+			{
+				buf[strlen(buf) - 1] = 0;
+			}
 
-    return 1;
+			sprintf(sendBuff, "%c:%d:%ld:%s", CMD_LIST, n, time(NULL), buf);
+			printf("[S->C][processMsg]sendBuff:%s\n",sendBuff);
+
+			write(connfd[n],sendBuff,strlen(sendBuff));
+		}
+		break;
+	case CMD_LOGIN:
+		{
+			printf("[processMsg]CMD_LOGIN\n");
+			s_users[n].id = n;
+			s_users[n].login_time = atol(data[OFT_TIM]);
+			strcpy(s_users[n].name, data[OFT_FRM]);
+
+			sprintf(sendBuff, "%c:%d:%ld:%s\t%s\0", CMD_LOGIN, n, time(NULL), data[OFT_FRM], "join in");
+			printf("[S->C][processMsg]sendBuff:%s\n",sendBuff);
+
+			//·´À¡login OKÏûÏ¢¸øclient
+			write(connfd[n],sendBuff,strlen(sendBuff));
+			
+			//°ÑĞÂÓÃ»§µÄ¼ÓÈë¸æÖªÆäËûÓÃ»§
+			for(i=0;i<MAX_USERS;i++)
+			{
+				if(i!=n && connfd[i]!=-1)
+				{
+					printf("[S->C][processMsg]i:%d notify other users\n",i);
+					write(connfd[i],sendBuff,strlen(sendBuff));
+				}
+				else if (i==n)
+				{
+					printf("[processMsg]i:%d itself, ip:%s\n",i, s_users[n].ipaddr);
+				}
+				else
+				{
+					printf("[processMsg]i:%d connfd null\n",i);
+				}
+			}
+		}
+		break;
+	case CMD_LOGOUT:
+		{
+			printf("[processMsg]CMD_LOGOUT\n");
+			sprintf(sendBuff, "%c:%d:%ld:%s", CMD_LOGOUT, n, time(NULL), "logout ok!");
+			printf("[S->C][processMsg]sendBuff:%s\n",sendBuff);
+			write(connfd[n],sendBuff,strlen(sendBuff));
+			s_users[n].id = -1;
+			strcpy(s_users[n].name, "");
+			strcpy(s_users[n].ipaddr, "");
+			s_users[n].isPrepared = TRUE;
+			printf("[processMsg]exit thread\n");
+			close(connfd[n]);
+			connfd[n] = -1;
+			pthread_exit(0);
+		}
+		break;
+	case CMD_PREPARE:
+		{
+			printf("[processMsg]CMD_PREPARE\n");
+			s_users[n].isPrepared = TRUE;
+			sprintf(sendBuff, "%c:%d:%ld:%s", CMD_PREPARE, n, time(NULL), "prepared");
+			printf("[S->C][processMsg]sendBuff:%s\n",sendBuff);
+			
+			hasSomeoneNotPrepared = FALSE;
+			memset(sendBuff, 0, sizeof(sendBuff));
+			for(i=0;i<MAX_USERS;i++)
+			{
+				if (s_users[i].id != -1)
+				{
+					countUsers++;
+					if (!s_users[i].isPrepared)
+					{
+						hasSomeoneNotPrepared = TRUE;
+						break;
+					}
+				}
+			}
+			
+			//ÓÃ»§Êı³¬¹ı2ÇÒËùÓĞÓÃ»§¶¼×¼±¸¾ÍĞ÷£¬½«·¢ÅÆ
+			printf("[processMsg]countUsers:%d,will fapai\n",countUsers);
+			if (countUsers >= 1 && !hasSomeoneNotPrepared)
+			{
+				printf("[processMsg]->initializePai\n");
+				initializePai(s_cards, COUNT_CARDS);
+				printf("[processMsg]->xiPai\n");
+				xiPai(s_cards,COUNT_CARDS);
+				printf("[processMsg]->faPai\n");
+				faPai(s_users, MAX_USERS, s_cards, COUNT_CARDS);
+				
+				//TODO:send to client
+				memset(buf, 0, sizeof(buf));
+				for(i=0;i<MAX_USERS;i++)
+				{
+					if (s_users[i].id != -1)
+					{
+						sprintf(info, "%d#%s#%d#%d#%d#%d#%d#", s_users[i].id, s_users[i].name, s_users[i].gameInfo.cards[0].id, 
+							s_users[i].gameInfo.cards[1].id, s_users[i].gameInfo.cards[2].id, s_users[i].gameInfo.cards[3].id, 
+							s_users[i].gameInfo.cards[4].id);
+						strcat(buf, info);
+					}
+				}
+				if (strlen(buf) > 0)
+				{
+					buf[strlen(buf) - 1] = 0;
+				}
+				sprintf(sendBuff, "%c:%d:%ld:%s", CMD_START, n, time(NULL), buf);
+				printf("[S->C][processMsg]sendBuff:%s\n",sendBuff);
+				
+				for (i=0;i<MAX_USERS;i++)
+				{
+					if (s_users[i].id != -1)
+					{
+						write(connfd[i],sendBuff,strlen(sendBuff));
+					}
+				}
+			}
+			else
+			{
+				printf("[processMsg]wait more users to prepare\n");
+			}
+		}
+		break;
+	case CMD_TRYINGBANKER:
+		{
+			printf("[processMsg]CMD_TRYINGBANKER\n");
+			//TODO: ×¯¼ÒÈçºÎ¾ö¶¨?Ê±¼äÏÈºó»¹ÊÇËæ»ú?
+			
+		}
+		break;
+	case CMD_STAKE:
+		{
+			printf("[processMsg]CMD_STAKE\n");
+			
+		}
+		break;
+	case CMD_PLAY:
+		{
+			printf("[processMsg]CMD_PLAY\n");
+			
+		}
+		break;
+	default:
+		return ERR;
+	}
+
+    return OK;
 }
 
